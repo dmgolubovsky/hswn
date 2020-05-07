@@ -1,0 +1,2 @@
+# hswn
+Haskell + wordnet
