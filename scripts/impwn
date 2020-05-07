@@ -1,0 +1,12 @@
+#! /bin/sh
+
+# Import the WN database and convert it into a SQLITE database where possible.
+
+# The .tar.gz file is expected on output.
+
+mkdir /tmp/wn
+
+cd /tmp/wn
+
+tar xzvf /dev/stdin
+
