@@ -8,7 +8,7 @@ mkdir /tmp/wn
 
 cd /tmp/wn
 
-tar xzvf /dev/stdin
+tar xzf /dev/stdin
 
 wnimport-exe ./dict/index.adv /b -t adverb -m index
 

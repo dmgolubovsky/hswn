@@ -53,6 +53,7 @@ run stack build --only-dependencies
 add wnimport/Main.hs app
 add wnimport/ImpWordIndex.hs app
 add wnimport/IpaMap.hs app
+add wnimport/IPA.hs app
 
 run stack build
 
