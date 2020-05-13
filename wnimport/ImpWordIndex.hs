@@ -8,6 +8,7 @@
 -- For each imported word, espeak will be invoked to determine the word's IPA,
 -- number of syllables, and the stress position. These values will be also stored.
 
+{-# LANGUAGE OverloadedStrings #-}
 
 module ImpWordIndex (impWordIndex) where
 
@@ -26,14 +27,26 @@ import System.FilePath
 import Data.List.HT (replace)
 import Database.SQLite.Simple
 
+import qualified Data.Text as T
 import qualified Data.Map as M
 
 import IPA
 import IpaMap
 
+instance ToRow IPAWord where
+  toRow iw = toRow (word iw, qual iw, concat $ map fromIPA $ ipa iw, rfd iw, rhyfd iw, numvow iw, stress iw)
+
 impWordIndex :: FilePath -> Connection -> String -> IO ()
 
 impWordIndex fp conn tbl = do
+  execute_ conn $ Query $ T.pack $ "create table if not exists " ++ tbl ++ "(" ++
+                                   "word TEXT, " ++
+                                   "qual TEXT, " ++
+                                   "ipa  TEXT, " ++
+                                   "rfd  TEXT, " ++
+                                   "rhyfd TEXT, " ++
+                                   "numvow INTEGER, " ++
+                                   "stress INTEGER" ++ ")"
   flines <- readFile fp >>= return . lines
   for_ flines $ \line -> case line of
     [] -> return ()
@@ -44,11 +57,17 @@ impWordIndex fp conn tbl = do
       ipas <- getIPA word
       let chrs = map fromIPA ipas
           iw = ipaword word ipas
-          iw' = iparefine False readIPAMap iw
+          iw' = iparefine False readIPAMap iw {qual = q}
           newmap = mkIPAMap [iw] readIPAMap
           uncat = M.filter (== IPAUnCat) newmap
-      putStrLn $ show chrs
-      prtIPAMap stdout uncat
-      putStrLn $ word ++ " " ++ q ++ " [" ++ concat chrs ++ "] [" ++ rfd iw' ++ "] [" ++ rhyfd iw' ++ "]"
+      if M.size uncat > 0
+        then do
+          prtIPAMap stdout uncat
+          putStrLn $ word ++ " " ++ q ++ " [" ++ concat chrs ++ "] [" ++ rfd iw' ++ "] [" ++ rhyfd iw' ++ "] (" ++ 
+                     show (M.size uncat) ++ ")"
+        else return ()
+      putStrLn $ "Importing " ++ word ++ " " ++ q ++ " [" ++ concat chrs ++ "]"
+      execute conn (Query $ T.pack $ "insert into " ++ tbl ++ " (word, qual, ipa, rfd, rhyfd, numvow, stress) " ++
+                                                        "values (?,    ?,    ?,   ?,   ?,     ?,      ?)") iw'
       return ()
   return ()

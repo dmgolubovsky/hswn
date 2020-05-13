@@ -118,6 +118,7 @@ getIPA utter = do
 
 data IPAWord = IPAWord {
   word :: String                     -- word proper
+ ,qual :: String                     -- part of speech
  ,ipa :: [IPA]                       -- original transcription
  ,ipa' :: [IPA]                      -- stress and long marks removed
  ,rfd :: String                      -- refined IPA (expressed in chars)
@@ -134,6 +135,7 @@ ipaword :: String -> [IPA] -> IPAWord
 
 ipaword w i = let i' = filter (not . hollow) i in IPAWord {
   word = w
+ ,qual = ""
  ,ipa = i'
  ,ipa' = map clean i'
  ,rfd = ""
@@ -153,7 +155,7 @@ iparefine :: Bool -> IPAMap -> IPAWord -> IPAWord
 
 iparefine sec mp ipaw = ipaw {
   rfd = rf
- ,rhyfd = map snd rhy
+ ,rhyfd = filter (/= '_') $ map snd rhy
  ,rfdpat = pat
  ,numvow = length $ filter (== 'V') pat
  ,stress = length $ takeWhile (not . stressed . fst) $ vowrev
