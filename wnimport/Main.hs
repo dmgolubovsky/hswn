@@ -35,7 +35,8 @@ main' (ImpFile impfp) (SqBase sqfp) opts = do
     then execute_ conn $ Query $ T.pack $ "DROP TABLE IF EXISTS " ++ tbl
     else return ()
   case (mode opts) of
-    Just "index" -> impWordIndex impfp conn tbl
+    Just "idxtest" -> impWordIndex impfp conn tbl True
+    Just "index" -> impWordIndex impfp conn tbl False
     _ -> hPutStrLn stderr "Import mode unsupported or unspecified"
   close conn
   return ()

@@ -10,6 +10,11 @@ import Text.RawString.QQ
 -- IPA' is the unified IPA used for rhyming.
 
 ipaMap = [r|# Please populate uncategorized entries
+ç:C:h
+nʲ:C:n
+ɑ̃::V:a
+ɔ̃:V:o
+ɬ:C:j
 b:C:b
 eɪ:V:e
 h:C:h

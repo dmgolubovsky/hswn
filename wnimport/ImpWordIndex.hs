@@ -36,9 +36,9 @@ import IpaMap
 instance ToRow IPAWord where
   toRow iw = toRow (word iw, qual iw, concat $ map fromIPA $ ipa iw, rfd iw, rhyfd iw, numvow iw, stress iw)
 
-impWordIndex :: FilePath -> Connection -> String -> IO ()
+impWordIndex :: FilePath -> Connection -> String -> Bool -> IO ()
 
-impWordIndex fp conn tbl = do
+impWordIndex fp conn tbl ustop = do
   execute_ conn $ Query $ T.pack $ "create table if not exists " ++ tbl ++ "(" ++
                                    "word TEXT, " ++
                                    "qual TEXT, " ++
@@ -60,14 +60,14 @@ impWordIndex fp conn tbl = do
           iw' = iparefine False readIPAMap iw {qual = q}
           newmap = mkIPAMap [iw] readIPAMap
           uncat = M.filter (== IPAUnCat) newmap
-      if M.size uncat > 0
+      if M.size uncat > 0 && ustop
         then do
           prtIPAMap stdout uncat
           putStrLn $ word ++ " " ++ q ++ " [" ++ concat chrs ++ "] [" ++ rfd iw' ++ "] [" ++ rhyfd iw' ++ "] (" ++ 
                      show (M.size uncat) ++ ")"
-        else return ()
-      putStrLn $ "Importing " ++ word ++ " " ++ q ++ " [" ++ concat chrs ++ "]"
-      execute conn (Query $ T.pack $ "insert into " ++ tbl ++ " (word, qual, ipa, rfd, rhyfd, numvow, stress) " ++
-                                                        "values (?,    ?,    ?,   ?,   ?,     ?,      ?)") iw'
-      return ()
+        else do
+          putStr $ "Importing " ++ word ++ " " ++ q ++ " [" ++ concat chrs ++ "]\r"
+          execute conn (Query $ T.pack $ "insert into " ++ tbl ++ " (word, qual, ipa, rfd, rhyfd, numvow, stress) " ++
+                                                            "values (?,    ?,    ?,   ?,   ?,     ?,      ?)") iw'
+          hFlush stdout
   return ()
