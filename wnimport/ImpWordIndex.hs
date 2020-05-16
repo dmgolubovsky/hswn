@@ -66,7 +66,7 @@ impWordIndex fp conn tbl ustop = do
           putStrLn $ word ++ " " ++ q ++ " [" ++ concat chrs ++ "] [" ++ rfd iw' ++ "] [" ++ rhyfd iw' ++ "] (" ++ 
                      show (M.size uncat) ++ ")"
         else do
-          putStr $ "Importing " ++ word ++ " " ++ q ++ " [" ++ concat chrs ++ "]\r"
+          putStrLn $ "Importing " ++ word ++ " " ++ q ++ " [" ++ concat chrs ++ "]"
           execute conn (Query $ T.pack $ "insert into " ++ tbl ++ " (word, qual, ipa, rfd, rhyfd, numvow, stress) " ++
                                                             "values (?,    ?,    ?,   ?,   ?,     ?,      ?)") iw'
           hFlush stdout

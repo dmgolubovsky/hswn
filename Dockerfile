@@ -4,10 +4,6 @@ run apt -y update && apt -y upgrade && apt -y autoremove
 
 run apt -y install sqlite3 libsqlite3-dev
 
-run mkdir /wn
-
-volume /wn
-
 # Build espeak-ng
 
 from base-ubuntu as espeak
@@ -59,6 +55,32 @@ run stack build
 
 run stack install
 
+# Build the classifier
+
+from stack as wnclass
+
+run stack new wnclass  new-template -p "author-email:golubovsky@gmail.com" \
+                                    -p "author-name:Dmitry Golubovsky" \
+                                    -p "category:other" -p "copyright:none" \
+                                    -p "github-username:dmgolubovsky"
+
+workdir /wnclass
+
+run stack setup
+
+add wnclass/package.yaml .
+
+add wnclass/stack.yaml .
+
+run stack build --only-dependencies
+
+add wnclass/Main.hs app
+
+run stack build
+
+run stack install
+
+
 from base-ubuntu as hswn
 
 run echo "APT::Get::Install-Recommends \"false\";" >> /etc/apt/apt.conf
@@ -70,6 +92,7 @@ run apt install -y sox libsonic0 strace locales
 
 copy --from=espeak /espeak /espeak
 copy --from=wnimport /root/.local/bin /root/.local/bin
+copy --from=wnclass /root/.local/bin /root/.local/bin
 
 run /usr/sbin/locale-gen en_US.UTF-8
 
@@ -84,4 +107,5 @@ from scratch
 copy --from=hswn / /
 env PATH=/bin:/usr/bin:/usr/local/bin:/espeak/bin:/root/.local/bin
 env LANG=en_US.UTF-8
+
 

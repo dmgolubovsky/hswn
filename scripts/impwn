@@ -10,8 +10,8 @@ cd /tmp/wn
 
 tar xzf /dev/stdin
 
-#wnimport-exe ./dict/index.adv /b -t adverb -m idxtest
-#wnimport-exe ./dict/index.adj /b -t adject -m idxtest
-wnimport-exe ./dict/index.noun /b -t noun -m idxtest
-wnimport-exe ./dict/index.verb /b -t verb -m idxtest
+wnimport-exe ./dict/index.adv  /wn/wn.sqlite3 -t adverb -m index
+wnimport-exe ./dict/index.adj  /wn/wn.sqlite3 -t adject -m index
+wnimport-exe ./dict/index.noun /wn/wn.sqlite3 -t noun -m index
+wnimport-exe ./dict/index.verb /wn/wn.sqlite3 -t verb -m index
 
