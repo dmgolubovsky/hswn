@@ -2,7 +2,7 @@
 
 # Import the WN database and convert it into a SQLITE database where possible.
 
-# The .tar.gz file is expected on output.
+# The .tar.gz file is expected on input.
 
 mkdir /tmp/wn
 

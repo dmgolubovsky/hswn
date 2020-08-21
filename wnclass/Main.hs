@@ -15,8 +15,9 @@ import WithCli
 import Data.Maybe
 import System.IO
 import Data.Char
-import Data.List (nub)
+import Data.List (nub, isSuffixOf, take, partition)
 import Control.Monad.HT (for)
+import Control.Monad.Loops
 import System.FilePath
 import Database.SQLite.Simple
 import Database.SQLite.Simple.QQ
@@ -26,7 +27,7 @@ data WordClass = WordClass {
   root :: String         -- part of word that matched
  ,qual :: String         -- part of speech detected (empty string if not detected)
  ,suffix :: String       -- suffix that was removed to match
-} deriving (Show)
+} deriving (Eq, Show)
 
 
 unzipWith :: (a -> b -> c) -> [(a, b)] -> [c]
@@ -45,19 +46,51 @@ classWord conn w = do
     [] -> return [WordClass w "" ""]
     rs@((r, q):_) -> return $ unzipWith wc rs where wc a b = WordClass a b ""
 
+
+suffixes = ["", "s", "'s", "es", "d", "ed", "ing"]
+
+stripSuffix :: String -> [(String, String)]
+
+stripSuffix w = catMaybes $ map (onesfx w) suffixes where
+  onesfx w "" = Just (w, "")
+  onesfx w s | s `isSuffixOf` w = Just (take ln w, s) where ln = length w - length s
+  onesfx _ _ = Nothing
+
 main = withCliModified mods main'
 
 main' :: SqBase -> Options -> IO ()
 
 main' (SqBase sqfp) opts = do
   w0 <- readFile "/dev/stdin"
-  let wds = nub $ words $ map toLower w0
+  let wds = words $ map toLower w0
   conn <- open sqfp
   for wds $ \w -> do
-    res <- classWord conn w
-    mapM (putStrLn . show) res
+    let ssfx = stripSuffix w
+    res' <- for ssfx $ \(wd, sx) -> do
+      let hasQual (WordClass _ "" "") = True
+          hasQual (WordClass _ q _) | length q > 0 = True
+          hasQual (WordClass _ "" s) | length s > 0 = False
+          hasQual (WordClass _ _ _) = False
+      rr <- classWord conn wd >>= return . nub
+      rr' <- for rr (\(WordClass r q _) -> return $ WordClass r q sx)
+      return $ filter hasQual rr'
+    let res = concat res'
+    let partGrp s = case partition (\(WordClass _ q _) -> length q == 0) s of
+          ([], []) -> []
+          (s1, []) -> take 1 s1
+          (_, s2) -> s2
+    let pres = partGrp res
+    putStrLn $ showRes pres
   close conn
   return ()
+
+showRes :: [WordClass] -> String
+
+showRes [] = "<Nothing>"
+showRes ((WordClass r "" _):x) =  map toUpper r
+showRes ws@((WordClass r q _):wqs) = "@" ++ (s r ws) where
+  s r [] = "(" ++ map toUpper r ++ ")"
+  s r (wc:wcs) = map toUpper (qual wc) ++ s r wcs
 
 
 data SqBase = SqBase FilePath
