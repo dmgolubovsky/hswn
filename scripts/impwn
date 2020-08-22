@@ -10,8 +10,14 @@ cd /tmp/wn
 
 tar xzf /dev/stdin
 
+wnimport-exe ./dict/adj.exc  /wn/wn.sqlite3 -t adjexc -m exctable
+wnimport-exe ./dict/adv.exc  /wn/wn.sqlite3 -t advexc -m exctable
+wnimport-exe ./dict/verb.exc /wn/wn.sqlite3 -t verbexc -m exctable
+wnimport-exe ./dict/noun.exc /wn/wn.sqlite3 -t nounexc -m exctable
+
 wnimport-exe ./dict/index.adv  /wn/wn.sqlite3 -t adverb -m index
 wnimport-exe ./dict/index.adj  /wn/wn.sqlite3 -t adject -m index
 wnimport-exe ./dict/index.noun /wn/wn.sqlite3 -t noun -m index
 wnimport-exe ./dict/index.verb /wn/wn.sqlite3 -t verb -m index
+
 

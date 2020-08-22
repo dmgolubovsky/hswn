@@ -21,6 +21,7 @@ import qualified Data.Text as T
 -- Local modules
 
 import ImpWordIndex (impWordIndex)
+import ImpExcTable (impExcTable)
 
 main = withCliModified mods main'
 
@@ -37,6 +38,7 @@ main' (ImpFile impfp) (SqBase sqfp) opts = do
   case (mode opts) of
     Just "idxtest" -> impWordIndex impfp conn tbl True
     Just "index" -> impWordIndex impfp conn tbl False
+    Just "exctable" -> impExcTable impfp conn tbl
     _ -> hPutStrLn stderr "Import mode unsupported or unspecified"
   close conn
   return ()
