@@ -82,6 +82,32 @@ run stack build
 run stack install
 
 
+# Build the rhymer
+
+from stack as wnrhymer
+
+run stack new wnrhymer  new-template -p "author-email:golubovsky@gmail.com" \
+                                     -p "author-name:Dmitry Golubovsky" \
+                                     -p "category:other" -p "copyright:none" \
+                                     -p "github-username:dmgolubovsky"
+
+workdir /wnrhymer
+
+run stack setup
+
+add wnrhymer/package.yaml .
+
+add wnrhymer/stack.yaml .
+
+run stack build --only-dependencies
+
+add wnrhymer/Main.hs app
+
+run stack build
+
+run stack install
+
+
 from base-ubuntu as hswn
 
 run echo "APT::Get::Install-Recommends \"false\";" >> /etc/apt/apt.conf
@@ -93,7 +119,9 @@ run apt install -y sox libsonic0 strace locales
 
 copy --from=espeak /espeak /espeak
 copy --from=wnimport /root/.local/bin /root/.local/bin
-copy --from=wnclass /root/.local/bin /root/.local/bin
+copy --from=wnclass  /root/.local/bin /root/.local/bin
+copy --from=wnrhymer /root/.local/bin /root/.local/bin
+
 
 run /usr/sbin/locale-gen en_US.UTF-8
 
