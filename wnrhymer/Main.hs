@@ -45,13 +45,75 @@ main' :: SqBase -> RhyPat -> Sentence -> Options -> IO ()
 main' (SqBase sqfp) (RhyPat rhypat) (Sentence stnc) opts = do
   let nrhy = fromMaybe 10 (rhymes opts)
   conn <- open sqfp
+  case (corpus opts) of
+    Just c -> error "unsupported"
+    Nothing -> execute_ conn [sql|create temporary table corpus as select distinct * from
+                                     (select * from adverb union 
+                                      select * from adject union 
+                                      select * from noun union 
+                                      select * from verb)|] 
   rword <- case (endw opts) of
              Just w -> return w
              Nothing -> getRandomWord conn rhypat
   putStrLn rword
   rhymes <- allRhymes conn rword nrhy rhypat stnc
+  lines <- mapM (makeLine conn rhypat stnc) rhymes
+  mapM (putStrLn . show) lines
   close conn
   return ()
+
+-- Drop elements from the end of a list
+
+dropEnd n = reverse . (drop n) . reverse
+
+-- Take an element from the end of a list
+
+takeEnd n = reverse . (take n) . reverse
+
+-- Make one line given the last word, sentence structure, and rhytmic pattern.
+-- The last word is expected to come from allRhymes and be in agreement with
+-- the sentence structure and rhytmic pattern.
+
+makeLine :: Connection -> String -> String -> IPAData -> IO [String]
+
+makeLine conn rhypat stnc ipd = do
+  let rhypat' = dropEnd (numvow ipd) rhypat
+      stnc' = dropEnd 1 stnc
+  mkl [word ipd] rhypat' stnc' where
+    mkl ws rhy stn | length rhy == 0 || length stn == 0 = return ws
+    mkl ws rhy stn = do
+      let patstr = findPatStress rhy
+          ql = map toLower $ takeEnd 1 stn
+          maxvow = length rhy
+          highvow = let z = (length rhy `div` length stn) in if z < patstr + 1 then patstr + 1 else z
+          b1 = (if (length stn) == 1 then 0 else 1) :: Int
+      nxipa <- queryNamed conn [sql|select distinct * from corpus 
+                                        where qual = :ql and
+                                              stress = :str and
+                                              word not like '% %' and
+                                              word not like '%-%' and
+                                              (numvow <= :highvow and 1 = :b1 or numvow = :maxvow and 0 = :b1) 
+                                          order by random() limit 1|] 
+                                            [":ql" := ql, ":str" := patstr, ":maxvow" := maxvow, ":b1" := b1, ":highvow" := highvow] :: IO [IPAData]
+      case nxipa of
+        [] -> if ql `elem` (map show [1 .. 9])
+                then do
+                        let mwords = ["FOO", "BAR", "BAZ", "QUX", "QUUX", "QUUZ", "CORG", "WALD", "FRED", "PLUGH"]
+                            mwidx = (read ql) :: Int
+                            nxws = (mwords !! (mwidx - 1)) : ws
+                            nxrhy = dropEnd 1 rhy
+                            nxstn = dropEnd 1 stn
+                        mkl nxws nxrhy nxstn
+                else do
+                        putStrLn $ "cannot find a word ql=" ++ ql ++ " stress=" ++ show patstr ++ " numvow<=" ++ show highvow
+                        return ws
+        ip:ips -> do
+          let nxws = word ip : ws
+              nxrhy = dropEnd (numvow ip) rhy
+              nxstn = dropEnd 1 stn
+          mkl nxws nxrhy nxstn
+        
+ 
 
 -- Find last stress position in a pattern. This is the position of the first
 -- capital letter from the end, and if no capital letter is found then
@@ -67,15 +129,11 @@ findPatStress pat = fps 0 (reverse pat) where
 -- Get a desired number of rhymes for the given word with respect to
 -- part of speech and rhytmic patern (last stressed syllable position
 
-allRhymes :: Connection -> String -> Int -> String -> String -> IO [String]
+allRhymes :: Connection -> String -> Int -> String -> String -> IO [IPAData]
 
 allRhymes conn rword nrhy rhypat stnc = do
   let rq = toLower $ head (reverse stnc)
-  res <- queryNamed conn [sql|select distinct * from 
-                                (select * from adverb union 
-                                 select * from adject union 
-                                 select * from noun union 
-                                 select * from verb) 
+  res <- queryNamed conn [sql|select distinct * from corpus
                                    where word = :word|] [":word" := map toLower rword] :: IO [IPAData]
   case res of
     [] -> error $ "cannot retrieve information for " ++ rword
@@ -89,21 +147,17 @@ allRhymes conn rword nrhy rhypat stnc = do
       let h1 = nrhy `div` 2
           h2 = nrhy - h1
       let getwords cmp dir nw = query_ conn (Query $ T.pack $ 
-           "select distinct * from " ++
-              "(select * from adverb union " ++
-              "select * from adject union " ++
-              "select * from noun union " ++
-              " select * from verb) " ++
+           "select distinct * from corpus " ++
                 " where rhyfd " ++ cmp ++ "'" ++ rhyfd rw ++ "' " ++
                 " and stress = " ++ show patstr ++ 
                 " and numvow <= " ++ show (numvow rw) ++
                 " and word not like '% %' " ++
+                " and word not like '%-%' " ++
                 " and qual = '" ++ [rq] ++ "' " ++
                   " order by rhyfd " ++ dir ++ " limit " ++ show (if nw < 0 then 0 else nw)) :: IO [IPAData]
       rhys1 <- getwords ">" "asc" h1
       rhys2 <- getwords "<" "desc" h2
-      mapM (putStrLn . show . word) (rhys1 ++ rhys2)
-  return []
+      return (rhys1 ++ rhys2)
 
 
 -- Get a random word from the entire database wrt the desired rhyming pattern
@@ -112,12 +166,8 @@ getRandomWord :: Connection -> String -> IO String
 
 getRandomWord conn rhypat = do
   let patstr = findPatStress rhypat
-  res <- queryNamed conn [sql|select distinct word, qual from 
-                             (select * from adverb union 
-                              select * from adject union 
-                              select * from noun union 
-                              select * from verb) 
-                                where word not like '% %' and stress = :stress
+  res <- queryNamed conn [sql|select distinct word, qual from corpus
+                                where word not like '% %' and stress = :stress and word not like '%-%'
                               order by random() limit 1|] [":stress" := patstr] :: IO [(String, String)]
   case res of
     [] -> error "cannot make random selection"
@@ -156,6 +206,7 @@ instance HasArguments Sentence where
 data Options = Options {
   rhymes :: Maybe Int
  ,endw :: Maybe String
+ ,corpus :: Maybe String
 } deriving (Show, Generic, HasArguments)
 
 
@@ -166,6 +217,8 @@ mods = [
  ,AddOptionHelp  "rhymes" "Number of rhymed lines to produce, default is 10"
  ,AddShortOption "endw" 'w'
  ,AddOptionHelp  "endw" "Ending word of the line"
+ ,AddShortOption "corpus" 'c'
+ ,AddOptionHelp  "corpus" "Path to the corpus file (or /dev/stdin)"
        ]
 
 
