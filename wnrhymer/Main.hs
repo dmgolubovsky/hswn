@@ -16,7 +16,7 @@ import WithCli
 import Data.Maybe
 import System.IO
 import Data.Char
-import Data.List (nub, isSuffixOf, take, partition)
+import Data.List (nub, isSuffixOf, take, partition, intercalate)
 import Control.Monad.HT (for)
 import Control.Monad.Loops
 import System.FilePath
@@ -46,12 +46,15 @@ main' (SqBase sqfp) (RhyPat rhypat) (Sentence stnc) opts = do
   let nrhy = fromMaybe 10 (rhymes opts)
   conn <- open sqfp
   case (corpus opts) of
-    Just c -> error "unsupported"
+    Just fp -> makeCorpus conn fp
     Nothing -> execute_ conn [sql|create temporary table corpus as select distinct * from
                                      (select * from adverb union 
                                       select * from adject union 
                                       select * from noun union 
-                                      select * from verb)|] 
+                                      select * from verb)
+                                        where numvow <= 4 and
+                                              word not like '% %' and
+                                              word not like '%-%'|] 
   rword <- case (endw opts) of
              Just w -> return w
              Nothing -> getRandomWord conn rhypat
@@ -61,6 +64,48 @@ main' (SqBase sqfp) (RhyPat rhypat) (Sentence stnc) opts = do
   mapM (putStrLn . show) lines
   close conn
   return ()
+
+-- Find a proper word for an altered one
+
+properWord :: Connection -> String -> IO [String]
+
+properWord conn w = do
+  res <- queryNamed conn [sql|select distinct altered, proper from
+                                (select * from advexc union 
+                                 select * from adjexc union 
+                                 select * from nounexc union 
+                                 select * from verbexc)
+                                   where altered = :word|] [":word" := w] :: IO [(String, String)]
+  case res of
+    [] -> return [w]
+    wc:_ -> return [fst wc, snd wc]
+
+
+suffixes = ["", "s", "'s", "es", "d", "ed", "ing"]
+
+stripSuffix :: String -> [String]
+
+stripSuffix w = concatMap (onesfx w) suffixes where
+  onesfx w "" = [w]
+  onesfx w s | s `isSuffixOf` w = [w, take ln w] where ln = length w - length s
+  onesfx _ _ = []
+
+-- Given a text file make the corpus table out of it
+
+makeCorpus :: Connection -> FilePath -> IO ()
+
+makeCorpus conn fp = do
+  w0 <- readFile fp
+  let w = filter ((> 3) . length) . nub $ map (filter isAlpha) $ words $ map toLower w0
+  let w1 = concatMap stripSuffix w
+  w2 <- mapM (properWord conn) w >>= return . concat
+  let wq = "'" ++ intercalate "','" (nub $ w1 ++ w2) ++ "'"
+  execute_ conn (Query $ T.pack (
+    "create temporary table corpus as select distinct * from " ++
+    "  (select * from adverb union " ++
+    "   select * from adject union " ++
+    "   select * from noun union " ++
+    "   select * from verb) where word in (" ++ wq ++ ")"))
 
 -- Drop elements from the end of a list
 
@@ -80,21 +125,26 @@ makeLine conn rhypat stnc ipd = do
   let rhypat' = dropEnd (numvow ipd) rhypat
       stnc' = dropEnd 1 stnc
   mkl [word ipd] rhypat' stnc' where
-    mkl ws rhy stn | length rhy == 0 || length stn == 0 = return ws
+    mkl ws [] [] = return ws
+    mkl ws [] stn = return (take (length stn) (repeat "*") ++ ws)
+    mkl ws rhy [] = return (take (length rhy) (repeat ".") ++ ws)
     mkl ws rhy stn = do
       let patstr = findPatStress rhy
           ql = map toLower $ takeEnd 1 stn
           maxvow = length rhy
           highvow = let z = (length rhy `div` length stn) in if z < patstr + 1 then patstr + 1 else z
           b1 = (if (length stn) == 1 then 0 else 1) :: Int
-      nxipa <- queryNamed conn [sql|select distinct * from corpus 
+      nxipa1 <- queryNamed conn [sql|select distinct * from corpus 
                                         where qual = :ql and
                                               stress = :str and
-                                              word not like '% %' and
-                                              word not like '%-%' and
                                               (numvow <= :highvow and 1 = :b1 or numvow = :maxvow and 0 = :b1) 
-                                          order by random() limit 1|] 
+                                          order by random(), numvow limit 1|] 
                                             [":ql" := ql, ":str" := patstr, ":maxvow" := maxvow, ":b1" := b1, ":highvow" := highvow] :: IO [IPAData]
+      nxipa2 <- queryNamed conn [sql|select distinct * from corpus
+                                       where qual = :ql and
+                                             numvow = 1
+                                         order by random() limit 1|] [":ql" := ql] :: IO [IPAData]
+      let nxipa = take 1 $ nxipa1 ++ nxipa2
       case nxipa of
         [] -> if ql `elem` (map show [1 .. 9])
                 then do
@@ -151,8 +201,6 @@ allRhymes conn rword nrhy rhypat stnc = do
                 " where rhyfd " ++ cmp ++ "'" ++ rhyfd rw ++ "' " ++
                 " and stress = " ++ show patstr ++ 
                 " and numvow <= " ++ show (numvow rw) ++
-                " and word not like '% %' " ++
-                " and word not like '%-%' " ++
                 " and qual = '" ++ [rq] ++ "' " ++
                   " order by rhyfd " ++ dir ++ " limit " ++ show (if nw < 0 then 0 else nw)) :: IO [IPAData]
       rhys1 <- getwords ">" "asc" h1
@@ -167,7 +215,7 @@ getRandomWord :: Connection -> String -> IO String
 getRandomWord conn rhypat = do
   let patstr = findPatStress rhypat
   res <- queryNamed conn [sql|select distinct word, qual from corpus
-                                where word not like '% %' and stress = :stress and word not like '%-%'
+                                where word not like '% %' and stress = :stress
                               order by random() limit 1|] [":stress" := patstr] :: IO [(String, String)]
   case res of
     [] -> error "cannot make random selection"
