@@ -22,7 +22,11 @@ import Control.Monad.Loops
 import System.FilePath
 import Database.SQLite.Simple
 import Database.SQLite.Simple.QQ
+import Data.Attoparsec.Text hiding (take)
+import Control.Applicative
+import qualified Data.Map.Strict as M
 import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
 
 data IPAData = IPAData {
   word :: String                     -- word proper
@@ -38,12 +42,103 @@ instance FromRow IPAData where fromRow = IPAData <$> field <*> field <*> field <
 
 main = withCliModified mods main'
 
--- SQL Database Path -> Syllable Pattern -> Sentence Structure
+-- Line pattern example:
+-- 1: We always wanted "Nn" to be "aA"
+-- And "Nn" newer happened to "Vv" "nN" (1)
 
-main' :: SqBase -> RhyPat -> Sentence -> Options -> IO ()
+newtype IntField = IntField {
+  fromIntField :: Int
+}
 
-main' (SqBase sqfp) (RhyPat rhypat) (Sentence stnc) opts = do
-  let nrhy = fromMaybe 10 (rhymes opts)
+instance FromRow IntField where fromRow = IntField <$> field
+
+-- Parsed lyrics line
+
+data ParsedLine = ParsedLine {
+  lineLabel :: Maybe String
+ ,lineWords :: [LineWord] -- words are in reverse so the rhyme can be easily found
+} deriving (Show)
+
+data LineWord = FixedWord String
+              | WordPattern String
+              | RhymedPattern String String
+     deriving (Show)
+
+-- Parser stuff
+
+pLine :: Parser ParsedLine
+
+pLine = do
+  lw <- (pLabel >>= return . Left) <|> (pWord >>= return . Right)
+  many1 $ char ' '
+  wds <- pWord `sepBy` (many1 $ char ' ')
+  many1 endOfLine
+  case lw of
+    Left ll -> return $ ParsedLine (Just ll) (reverse wds)
+    Right w -> return $ ParsedLine Nothing (reverse (w : wds))
+  
+pLabel :: Parser String
+
+pLabel = manyTill digit (char ':')
+
+pWord :: Parser LineWord
+
+pWord = (rp >>= return . uncurry RhymedPattern) <|> (fx >>= return . FixedWord) <|> (wp >>= return . WordPattern) where
+  fx = many1 letter
+  wp = char '"' >> manyTill letter (char '"')
+  rp = do
+    char '"'
+    w1 <- fx
+    w2 <- char '/' *> manyTill digit (char '"')
+    return (w1, w2)
+
+parseLyrics :: FilePath -> IO [ParsedLine]
+
+parseLyrics rhypat = do
+  pat <- TIO.readFile rhypat
+  TIO.putStrLn pat
+  let res = prs [] (many1 pLine) pat where
+        prs ll p pat | T.null pat = ll
+        prs ll p pat = let res = parse p pat in case res of
+                         Done i r -> prs (ll ++ r) p i
+                         Partial x -> let res1 = feed res T.empty in case res1 of
+                           Done i r -> prs (ll ++ r) p i
+                           _ -> error $ "nested parse failure: " ++ show res1
+                         Fail _ _ _ -> error $ "parse failure: " ++ show res
+  return res
+
+-- Generate lyrics from a parsed template.
+
+genLyrics :: Connection -> [ParsedLine] -> IO [String]
+
+genLyrics conn lns = gl conn lns [] M.empty M.empty where
+  getWord _ _ (FixedWord w) = return w
+  getWord _ _ (WordPattern p) = getRandomWordQual conn p
+  getWord rhymap _ (RhymedPattern p r) = do
+    let rhw = M.lookup r rhymap
+    case rhw of
+      Nothing -> getRandomWordQual conn p
+      Just rh -> do
+        rhs <- allRhymes conn rh 1 p p >>= return . (map word)
+        case rhs of
+          [] -> getRandomWordQual conn p
+          _ -> return $ head rhs
+  gl conn [] acc rhymap refmap = return acc
+  gl conn (l:lns) acc rhymap refmap = do
+    ln <- mapM (getWord rhymap refmap) (lineWords l)
+    let rhymap' = case lineLabel l of
+                    Nothing -> rhymap
+                    Just lab -> M.insert lab (head ln) rhymap
+    let refmap' = refmap
+    let acc' = acc ++ reverse ln ++ ["\n"]
+    gl conn lns acc' rhymap' refmap'
+
+
+-- SQL Database Path -> Lyrics pattern path
+
+main' :: SqBase -> LyrPat -> Options -> IO ()
+
+main' (SqBase sqfp) (LyrPat rhypat) opts = do
   conn <- open sqfp
   case (corpus opts) of
     Just fp -> makeCorpus conn fp
@@ -55,13 +150,11 @@ main' (SqBase sqfp) (RhyPat rhypat) (Sentence stnc) opts = do
                                         where numvow <= 4 and
                                               word not like '% %' and
                                               word not like '%-%'|] 
-  rword <- case (endw opts) of
-             Just w -> return w
-             Nothing -> getRandomWord conn rhypat
-  putStrLn rword
-  rhymes <- allRhymes conn rword nrhy rhypat stnc
-  lines <- mapM (makeLine conn rhypat stnc) rhymes
-  mapM (putStrLn . show) lines
+  (IntField nw):_ <- query_ conn [sql|select count(distinct word) from corpus|] :: IO [IntField]
+  putStrLn $ "Corpus: " ++ show nw ++ " words"
+  lns <- parseLyrics rhypat
+  lrs <- genLyrics conn lns
+  mapM (\s -> putStr (" " ++ s)) lrs
   close conn
   return ()
 
@@ -188,9 +281,7 @@ allRhymes conn rword nrhy rhypat stnc = do
   case res of
     [] -> error $ "cannot retrieve information for " ++ rword
     (rw:_) -> do
-      putStrLn $ show rw
       let patstr = findPatStress rhypat
-      putStrLn $ "pattern stress pos " ++ show patstr
       if stress rw /= patstr
         then putStrLn $ "warning: pattern stress =/= word stress"
         else return ()
@@ -221,6 +312,21 @@ getRandomWord conn rhypat = do
     [] -> error "cannot make random selection"
     x  -> return $ fst (head res)
 
+-- Get a random word from the entire database wrt the desired rhyming pattern and the word qualifier (the first letter of the pattern)
+
+getRandomWordQual :: Connection -> String -> IO String
+
+getRandomWordQual conn rhypat = do
+  let patstr = findPatStress rhypat
+      qual = map toLower (take 1 rhypat)
+      nvow = length rhypat
+  res <- queryNamed conn [sql|select distinct word, qual from corpus
+                                where word not like '% %' and stress = :stress and qual = :qual and numvow = :nvow
+                              order by random() limit 1|] [":stress" := patstr, ":qual" := qual, ":nvow" := nvow] :: IO [(String, String)]
+  case res of
+    [] -> error "cannot make random selection"
+    x  -> return $ fst (head res)
+
 
 data SqBase = SqBase FilePath
 
@@ -232,40 +338,25 @@ instance HasArguments SqBase where
   argumentsParser = atomicArgumentsParser
 
 
-data RhyPat = RhyPat String
+data LyrPat = LyrPat FilePath
 
-instance Argument RhyPat where
-  argumentType Proxy = "rhyme-pattern"
-  parseArgument f = Just (RhyPat f)
+instance Argument LyrPat where
+  argumentType Proxy = "lyrics-pattern"
+  parseArgument f = Just (LyrPat f)
 
-instance HasArguments RhyPat where
-  argumentsParser = atomicArgumentsParser
-
-data Sentence = Sentence String
-
-instance Argument Sentence where
-  argumentType Proxy = "sentence-structure"
-  parseArgument f = Just (Sentence f)
-
-instance HasArguments Sentence where
+instance HasArguments LyrPat where
   argumentsParser = atomicArgumentsParser
 
 
 data Options = Options {
-  rhymes :: Maybe Int
- ,endw :: Maybe String
- ,corpus :: Maybe String
+  corpus :: Maybe String
 } deriving (Show, Generic, HasArguments)
 
 
 mods :: [Modifier]
 
 mods = [
-  AddShortOption "rhymes" 'r'
- ,AddOptionHelp  "rhymes" "Number of rhymed lines to produce, default is 10"
- ,AddShortOption "endw" 'w'
- ,AddOptionHelp  "endw" "Ending word of the line"
- ,AddShortOption "corpus" 'c'
+  AddShortOption "corpus" 'c'
  ,AddOptionHelp  "corpus" "Path to the corpus file (or /dev/stdin)"
        ]
 

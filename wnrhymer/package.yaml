@@ -32,6 +32,7 @@ dependencies:
         - raw-strings-qq
         - containers
         - monad-loops
+        - attoparsec
 
 library:
   source-dirs: src

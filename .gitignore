@@ -26,3 +26,4 @@ dist
 src/.*.swp
 *.wav
 .envrc
+*.old_hs
