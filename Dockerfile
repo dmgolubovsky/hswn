@@ -129,6 +129,8 @@ run apt clean
 
 add scripts /usr/bin
 
+# Temporarily suspend database import
+
 # run /usr/bin/impwn
 
 # Flatten the image
