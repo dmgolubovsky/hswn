@@ -2,7 +2,7 @@ from ubuntu:20.04 as base-ubuntu
 
 run apt -y update && apt -y upgrade && apt -y autoremove
 
-run apt -y install sqlite3 libsqlite3-dev
+run apt -y install --no-install-recommends sqlite3 libsqlite3-dev wordnet wordnet-grind
 
 # Build espeak-ng
 
@@ -128,6 +128,8 @@ run /usr/sbin/locale-gen en_US.UTF-8
 run apt clean
 
 add scripts /usr/bin
+
+# run /usr/bin/impwn
 
 # Flatten the image
 
