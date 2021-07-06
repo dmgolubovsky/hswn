@@ -12,6 +12,8 @@ dist
 .stack-work
 src/.*.swp
 *.wav*.rej
+*/.*.swp
+*.swp
 *~
 *~~
 *.o

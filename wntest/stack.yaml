@@ -1,0 +1,10 @@
+resolver: lts-15.11
+
+packages:
+  - .
+
+
+extra-deps: 
+  - ./WordNet-1.1.0
+
+

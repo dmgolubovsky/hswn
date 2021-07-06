@@ -2,7 +2,7 @@ from ubuntu:20.04 as base-ubuntu
 
 run apt -y update && apt -y upgrade && apt -y autoremove
 
-run apt -y install --no-install-recommends sqlite3 libsqlite3-dev wordnet wordnet-grind
+run apt -y install --no-install-recommends apt-utils sqlite3 libsqlite3-dev wordnet wordnet-grind
 
 # Build espeak-ng
 
@@ -26,6 +26,27 @@ run apt install -y wget
 run wget -qO- https://get.haskellstack.org/ | sh
 run stack update
 run stack upgrade
+run stack setup ghc-8.8.3
+
+# Compile the wordnet test program
+
+from stack as wntest
+
+run stack new wntest new-template   -p "author-email:golubovsky@gmail.com" \
+                                    -p "author-name:Dmitry Golubovsky" \
+                                    -p "category:other" -p "copyright:none" \
+                                    -p "github-username:dmgolubovsky"
+
+workdir /wntest
+
+add wntest/package.yaml .
+
+add wntest/stack.yaml .
+
+add wntest/WordNet-1.1.0 WordNet-1.1.0
+
+run stack build --only-dependencies
+
 
 # Compile the importer
 
@@ -37,8 +58,6 @@ run stack new wnimport new-template -p "author-email:golubovsky@gmail.com" \
                                     -p "github-username:dmgolubovsky"
 
 workdir /wnimport
-
-run stack setup
 
 add wnimport/package.yaml .
 
@@ -67,8 +86,6 @@ run stack new wnclass  new-template -p "author-email:golubovsky@gmail.com" \
 
 workdir /wnclass
 
-run stack setup
-
 add wnclass/package.yaml .
 
 add wnclass/stack.yaml .
@@ -92,8 +109,6 @@ run stack new wnrhymer  new-template -p "author-email:golubovsky@gmail.com" \
                                      -p "github-username:dmgolubovsky"
 
 workdir /wnrhymer
-
-run stack setup
 
 add wnrhymer/package.yaml .
 
@@ -121,6 +136,7 @@ copy --from=espeak /espeak /espeak
 copy --from=wnimport /root/.local/bin /root/.local/bin
 copy --from=wnclass  /root/.local/bin /root/.local/bin
 copy --from=wnrhymer /root/.local/bin /root/.local/bin
+copy --from=wntest /root/.local/bin /root/.local/bin
 
 
 run /usr/sbin/locale-gen en_US.UTF-8
