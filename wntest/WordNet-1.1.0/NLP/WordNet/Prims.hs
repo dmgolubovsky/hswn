@@ -75,10 +75,10 @@ initializeWordNetWithOptions mSearchdir mWarn = do
                         $ openFileEx (makePath [searchdir, "index.sense"]) (BinaryMode ReadMode)
   cntlst  <- tryMaybeWarn (warn "Warning: initializeWordNet: cannot open file cntlist.rev")
                         $ openFileEx (makePath [searchdir, "cntlist.rev"]) (BinaryMode ReadMode)
-  keyidx  <- tryMaybeWarn (warn "Warning: initializeWordNet: cannot open file index.key")
-                        $ openFileEx (makePath [searchdir, "index.key"  ]) (BinaryMode ReadMode)
-  rkeyidx <- tryMaybeWarn (warn "Warning: initializeWordNet: cannot open file index.key.rev")
-                        $ openFileEx (makePath [searchdir, "index.key.rev"]) (BinaryMode ReadMode)
+--  keyidx  <- tryMaybeWarn (warn "Warning: initializeWordNet: cannot open file index.key")
+--                        $ openFileEx (makePath [searchdir, "index.key"  ]) (BinaryMode ReadMode)
+--  rkeyidx <- tryMaybeWarn (warn "Warning: initializeWordNet: cannot open file index.key.rev")
+--                        $ openFileEx (makePath [searchdir, "index.key.rev"]) (BinaryMode ReadMode)
   vsent   <- tryMaybeWarn (warn "Warning: initializeWordNet: cannot open sentence files (sentidx.vrb and sents.vrb)")
                         $ do
                idx <- openFileEx (makePath [searchdir, "sentidx.vrb"]) (BinaryMode ReadMode)
@@ -92,8 +92,8 @@ initializeWordNetWithOptions mSearchdir mWarn = do
                 excHandles  = listArray (Noun, Adv) mHands,
                 senseHandle = sense,
                 countListHandle = cntlst,
-                keyIndexHandle = keyidx,
-                revKeyIndexHandle = rkeyidx,
+                keyIndexHandle = Nothing, -- keyidx
+                revKeyIndexHandle = Nothing, -- rkeyidx
                 vSentHandle = vsent,
                 wnReleaseVersion = version,
                 dataDirectory = searchdir,

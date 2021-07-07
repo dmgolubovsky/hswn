@@ -2,7 +2,7 @@ from ubuntu:20.04 as base-ubuntu
 
 run apt -y update && apt -y upgrade && apt -y autoremove
 
-run apt -y install --no-install-recommends apt-utils sqlite3 libsqlite3-dev wordnet wordnet-grind
+run apt -y install --no-install-recommends apt-utils sqlite3 libsqlite3-dev wordnet wordnet-grind wordnet-sense-index
 
 # Build espeak-ng
 
@@ -47,6 +47,11 @@ add wntest/WordNet-1.1.0 WordNet-1.1.0
 
 run stack build --only-dependencies
 
+add wntest/Main.hs app
+
+run stack build
+
+run stack install
 
 # Compile the importer
 
