@@ -1,3 +1,3 @@
 all:
-	docker build -t hswn .
+	docker build $(CACHE) -t hswn .
 
