@@ -127,6 +127,13 @@ run stack build
 
 run stack install
 
+from base-ubuntu as lyrics
+
+run apt install -y git
+
+workdir /
+
+run git clone https://github.com/Lyrics/lyrics.git
 
 from base-ubuntu as hswn
 
@@ -135,13 +142,14 @@ run echo "APT::Get::Install-Suggests \"false\";" >> /etc/apt/apt.conf
 run echo "APT::Install-Recommends \"false\";" >> /etc/apt/apt.conf
 run echo "APT::Install-Suggests \"false\";" >> /etc/apt/apt.conf
 
-run apt install -y sox libsonic0 strace locales
+run apt install -y sox libsonic0 strace locales less
 
 copy --from=espeak /espeak /espeak
 copy --from=wnimport /root/.local/bin /root/.local/bin
 copy --from=wnclass  /root/.local/bin /root/.local/bin
 copy --from=wnrhymer /root/.local/bin /root/.local/bin
 copy --from=wntest /root/.local/bin /root/.local/bin
+copy --from=lyrics /lyrics/database /database
 
 
 run /usr/sbin/locale-gen en_US.UTF-8
