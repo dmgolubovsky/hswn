@@ -53,7 +53,7 @@ run stack build
 
 run stack install
 
-# Compile the importer
+# Compile the WN importer
 
 from stack as wnimport
 
@@ -75,6 +75,32 @@ add wnimport/ImpWordIndex.hs app
 add wnimport/ImpExcTable.hs app
 add wnimport/IpaMap.hs app
 add wnimport/IPA.hs app
+
+run stack build
+
+run stack install
+
+# Compile the lyrics importer
+
+from stack as lyrimport
+
+run stack new lyrimport new-template -p "author-email:golubovsky@gmail.com" \
+                                     -p "author-name:Dmitry Golubovsky" \
+                                     -p "category:other" -p "copyright:none" \
+                                     -p "github-username:dmgolubovsky"
+
+workdir /lyrimport
+
+add lyrimport/package.yaml .
+
+add lyrimport/stack.yaml .
+
+run stack build --only-dependencies
+
+add lyrimport/Main.hs app
+add lyrimport/ImpLyrics.hs app
+add lyrimport/IpaMap.hs app
+add lyrimport/IPA.hs app
 
 run stack build
 
@@ -145,6 +171,7 @@ run echo "APT::Install-Suggests \"false\";" >> /etc/apt/apt.conf
 run apt install -y sox libsonic0 strace locales less
 
 copy --from=espeak /espeak /espeak
+copy --from=lyrimport /root/.local/bin /root/.local/bin
 copy --from=wnimport /root/.local/bin /root/.local/bin
 copy --from=wnclass  /root/.local/bin /root/.local/bin
 copy --from=wnrhymer /root/.local/bin /root/.local/bin
@@ -167,6 +194,7 @@ add scripts /usr/bin
 from scratch
 
 copy --from=hswn / /
+run find  /database -type f | xargs -d '\n' cat | grep -v '^$' | sort -u | wc -l
 env PATH=/bin:/usr/bin:/usr/local/bin:/espeak/bin:/root/.local/bin
 env LANG=en_US.UTF-8
 
