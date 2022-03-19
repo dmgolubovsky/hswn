@@ -37,6 +37,13 @@ import IpaMap
 instance ToRow IPALine where
   toRow iw = toRow (line iw, srcid iw, concat $ map fromIPA $ ipa iw, rfd iw, rhyfd iw, numvow iw, stress iw, nstress iw)
 
+-- The most frequent Elglish words, we try to detect English language to get more than half of these words occurring
+
+
+
+freqengl = "the be and a of to in i you it have to that for do he with on this we that not but they say at what his from " ++
+           "go or by get she my can as know if me your all who about their will so would make just up think time there see her as out one"
+
 impLyrics :: FilePath -> Connection -> String -> Bool -> IO ()
 
 impLyrics fp conn tbl ustop = do
@@ -51,8 +58,15 @@ impLyrics fp conn tbl ustop = do
                                    "nstress INTEGER" ++ ")"
   fileContent <- LB.readFile fp
   let md5Digest = md5 fileContent
-  flines <- readFile fp >>= return . lines
-  let flines' = takeWhile (\l -> head (l ++ " ") /= '_') flines
+  fc <- readFile fp
+  let flines = lines fc
+      fwords = words fc
+      qwords = words freqengl
+      frqw = nub $ filter (`elem` qwords) fwords
+      pfrqw = 100 * length frqw `div` length qwords
+  let flines' = if pfrqw > 50
+      then takeWhile (\l -> head (l ++ " ") /= '_') flines
+      else []
   for_ flines' $ \line -> case line of
     [] -> return ()
     '_':_ -> return ()
@@ -61,7 +75,7 @@ impLyrics fp conn tbl ustop = do
       ipas <- getIPA line'
       let chrs = map fromIPA ipas
           iw = (ipaline line ipas) {srcid = show md5Digest}
-          iw' = iparefine False readIPAMap iw
+          iw' = iparefine True readIPAMap iw
           newmap = mkIPAMap [iw] readIPAMap
           uncat = M.filter (== IPAUnCat) newmap
       if M.size uncat > 0 && ustop
