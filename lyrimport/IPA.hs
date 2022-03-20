@@ -160,7 +160,7 @@ iparefine sec mp ipaw = ipaw {
  ,rhyfd = filter (/= '_') $ map snd rhy
  ,rfdpat = pat
  ,numvow = length $ filter (== 'V') pat
- ,stress = length $ takeWhile (not . stressed . fst) $ vowrev
+ ,stress = length $ takeWhile (not . stressed . fst) vowrev
  ,nstress = length $ filter (stressed . fst) vowrev
 } where
   stressed (IPA is) = (712 `elem` is) || (sec && (716 `elem` is))
