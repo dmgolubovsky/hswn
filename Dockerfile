@@ -98,9 +98,11 @@ add lyrimport/stack.yaml .
 run stack build --only-dependencies
 
 add lyrimport/Main.hs app
+add lyrimport/RhyMain.hs app
 add lyrimport/ImpLyrics.hs app
 add lyrimport/IpaMap.hs app
 add lyrimport/IPA.hs app
+add lyrimport/RunRhymer.hs app
 
 run stack build
 

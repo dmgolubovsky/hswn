@@ -49,6 +49,17 @@ executables:
     dependencies:
     - lyrimport
 
+  lyrrhymer-exe:
+    main:                RhyMain.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -main-is RhyMain
+    dependencies:
+    - lyrimport
+
 tests:
   lyrimport-test:
     main:                Spec.hs

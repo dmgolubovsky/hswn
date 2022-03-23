@@ -129,6 +129,8 @@ data IPALine = IPALine {
  ,nstress :: Int                     -- number of stressed syllables
 } deriving (Ord, Eq, Show)
 
+
+
 -- Initially construct an IPA line with minimal refinement that does not require
 -- an attribute map.
 
