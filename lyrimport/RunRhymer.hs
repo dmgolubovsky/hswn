@@ -92,9 +92,21 @@ simpleRhyme :: Connection -> String -> IPALine -> IO [String]
 
 simpleRhyme conn tbl il = do
   execute_ conn (Query $ T.pack ("create temporary view lyrrhymer_table as select * from " ++ tbl ++ "; "))
-  rhy1 <- queryNamed conn [sql|select distinct * from lyrrhymer_table where rhyfd > :rfd and nstress = :ns and stress = :st order by rhyfd limit 3|]
+  rhy1 <- queryNamed conn [sql|select distinct * 
+                                 from lyrrhymer_table 
+                                   where rhyfd > :rfd and 
+                                         nstress = :ns and 
+                                         stress = :st and
+                                         srcid not in (select srcid from srcids)
+                                     order by rhyfd limit 3|]
                           [":rfd" := rhyfd il, ":ns" := nstress il, ":st" := stress il] :: IO [IPALineR]
-  rhy2 <- queryNamed conn [sql|select distinct * from lyrrhymer_table where rhyfd < :rfd and nstress = :ns and stress = :st order by rhyfd desc limit 3|]
+  rhy2 <- queryNamed conn [sql|select distinct * 
+                                 from lyrrhymer_table 
+                                   where rhyfd < :rfd and 
+                                         nstress = :ns and 
+                                         stress = :st and
+                                         srcid not in (select srcid from srcids)
+                                     order by rhyfd desc limit 3|]
                           [":rfd" := rhyfd il, ":ns" := nstress il, ":st" := stress il] :: IO [IPALineR]
   return $ map lineR (rhy2 ++ rhy1)
 
@@ -117,12 +129,26 @@ findRhymeFor ll = let
        RhyLine il -> Just il
        _ -> Nothing
 
+collectSources :: Connection -> String -> [LyrLine] -> IO ()
+
+collectSources conn tbl ll = do
+  execute_ conn (Query $ T.pack "create temporary table srcids (srcid TEXT)")
+  forM_ ll $ \lyr -> do
+    let xline = case lyr of
+                  LyrLine il -> line il
+                  CommLine st -> st
+                  RhyLine il -> line il
+    execute_ conn (Query $ T.pack ("insert into srcids (SRCID) select SRCID from " ++ tbl ++ " where LINE = \"" ++ xline ++ "\""))
+  return ()
+
+
 runRhymer :: Connection -> String -> IO ()
 
 runRhymer conn tbl = do
   fc <- readFile "/dev/stdin"
   let flines = filter ((/=0) . length) $ lines fc
   lyrlines <- mapM mkLyrLine flines >>= return . reverse
+  collectSources conn tbl lyrlines
   let rl = findRhymeFor lyrlines
   case rl of
     Just il -> do
